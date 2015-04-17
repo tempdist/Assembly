@@ -1,0 +1,99 @@
+     1                                  ; Executable name	 : hexdump1
+     2                                  ; Version		 : 1.0
+     3                                  ; Created date		 : 4/8/2015
+     4                                  ; Last Update		 : 4/8/2015
+     5                                  ; Author		 : Jeff Duntemann
+     6                                  ; Description 		 : conversion of binary values to hexadecimal strings
+     7                                  ; 
+     8                                  ; Run it this way
+     9                                  ; 	hexdump1 < (input file)
+    10                                  ; Build using the Make file in this folder
+    11                                  ;
+    12                                  ;
+    13                                  
+    14                                  SECTION .bss			; section containig uninitialised data
+    15                                  
+    16                                  	BUFFLEN equ 1024	; Length of buffer, we read the file 16 bits at a time
+    17 00000000 <res 00000400>          	Buff:	resb BUFFLEN	; Text buffer itself
+    18                                  
+    19                                  SECTION .data			; section containing initialised data
+    20                                  
+    21 00000000 303020303020303020-     	HexStr: db "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00", 10
+    22 00000009 303020303020303020-
+    23 00000012 303020303020303020-
+    24 0000001B 303020303020303020-
+    25 00000024 303020303020303020-
+    26 0000002D 30300A             
+    27                                  	HEXLEN	equ $-HexStr
+    28                                  
+    29 00000030 303132333435363738-     	Digits: db "0123456789ABCDEF"	
+    30 00000039 39414243444546     
+    31                                  
+    32                                  SECTION .text			; section containing code
+    33                                  
+    34                                  global _start			; linker needs this to find entry point
+    35                                  
+    36                                  _start:
+    37 00000000 90                      	nop
+    38                                  
+    39                                  ; Read a buffer full of text from stdin:
+    40                                  read:
+    41 00000001 B803000000              	mov eax, 3			; specify sys_read call
+    42 00000006 BB00000000                   	mov ebx, 0			; specify file descriptor 0: Standard Input
+    43 0000000B B9[00000000]                  	mov ecx, Buff			; pass offset of the buffer to read to
+    44 00000010 BA00040000                    	mov edx, BUFFLEN		; pass number of bytes to read at one pass
+    45 00000015 CD80                          	int 80h				; call sys_read to fill the buffer
+    46 00000017 89C5                          	mov ebp, eax			; save # of bytes read from file for later
+    47 00000019 83F800                        	cmp eax, 0			; If eax=0, sys_read reached EOF on stdin
+    48 0000001C 7453                          	je Done				; jump if equal to 0 from compare
+    49                                  
+    50                                  ; set up the registers for the process of buffer step:
+    51 0000001E BE[00000000]            	mov esi, Buff			; place the address of file buffer into esi
+    52 00000023 BF[00000000]            	mov edi, HexStr			; place address of line string into edi
+    53 00000028 31C9                    	xor ecx, ecx			; clear line string pointer to 0
+    54                                  
+    55                                  ; go through the buffer and covert binary values to hex digits:
+    56                                  Scan:
+    57                                  
+    58 0000002A 31C0                    	xor eax, eax			; clear eax to 0
+    59                                  
+    60                                  ; Here we calculate the offset into HexStr, which is the value in ecx X 3
+    61 0000002C 89CA                    	mov edx, ecx			; copy the character counter into edx
+    62 0000002E D1E2                    	shl edx, 1			; multiply the pointer by 2 using left shift
+    63 00000030 01CA                    	add edx, ecx			; complete the multiplication X3
+    64                                  
+    65                                  ; get a character from the buffer and put it in both eax and ebx:
+    66 00000032 8A040E                  	mov al, byte [esi+ecx]		; put a byte from the input buffer into al
+    67 00000035 89C3                    	mov ebx, eax			; Duplicate the byte in bl for second nybble
+    68                                  
+    69                                  ; lookup the low nybble character and insert it into the string:
+    70 00000037 240F                    	and al, 0Fh			; mask out all but low nybble 
+    71 00000039 8A80[30000000]          	mov al, byte [Digits+eax]	; lookup the character equivalent of the nybble
+    72 0000003F 8882[02000000]          	mov byte [HexStr+edx+2], al	; write LSB char digit to line string
+    73                                  
+    74                                  ; look up the high nybble and insert it into the string:
+    75 00000045 C0EB04                  	shr bl, 4			; shift high 4 bits of characters in low 4 bits of operand
+    76 00000048 8A9B[30000000]          	mov bl, byte [Digits+ebx]	; lookup char equivalent of the nybble
+    77 0000004E 889A[01000000]          	mov byte [HexStr+edx+1], bl	; write MSB char digit to line string
+    78                                  
+    79                                  ; bump the buffer pointer to the next char and see if we're done:
+    80 00000054 41                      	inc ecx				; increment the line string pointer
+    81 00000055 39E9                    	cmp ecx, ebp			; compare to the number of chars in the buffer
+    82 00000057 76D1                    	jna Scan			; loop back if ecx is <= number of chars in buffer
+    83                                  
+    84                                  ; write the line of hexadecimal values to stdout:
+    85                                  
+    86 00000059 B804000000              	mov eax, 4			; specify sys_write call
+    87 0000005E BB01000000                    	mov ebx, 1			; specify file descriptor 1: standard output
+    88 00000063 B9[00000000]                  	mov ecx, HexStr			; pass offset of line string
+    89 00000068 BA30000000                    	mov edx, HEXLEN			; pass the size of line string
+    90 0000006D CD80                          	int 80h				; make sys_write kernel call
+    91 0000006F EB90                          	jmp read			; loop back and load another buffer full
+    92                                  
+    93                                  ; It's done! let's end the program:
+    94                                  Done:
+    95                                  
+    96 00000071 B801000000              	mov eax, 1			; code for Exist Syscall
+    97 00000076 BB00000000              	mov ebx, 0			; return a code of 0
+    98 0000007B CD80                    	int 80H				; make kernel call
+    99                                  
