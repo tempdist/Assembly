@@ -1,0 +1,200 @@
+     1                                  ; Executable name:  eatterm
+     2                                  ; Version:          1.0
+     3                                  ; Created date:     4/29/2015
+     4                                  ; Last update:      4/29/2015
+     5                                  ; Author:           Abhineet Sharma(ref Jef Dunttemann)
+     6                                  ; Description:	    A simple program in assembly for Linux, using
+     7                                  ; 		    NASM 2.05, demonstrating the use of escape
+     8                                  ; 		    sequences to do simple “full-screen" text output.
+     9                                  ;
+    10                                  ; Build using these commands:
+    11                                  ; nasm -f elf -g -F stabs eatterm.asm
+    12                                  ; ld -o eatterm eatterm.o
+    13                                  ;
+    14                                  ;
+    15                                  
+    16                                  SECTION .data				      ; section containing initialised data
+    17                                  
+    18                                  SCRWIDTH:	  EQU 80		      ; by default assume 80 characters wide
+    19 00000000 1B5B30313B303148        PosTerm:	  db 27, "[01;01H"	      ; <ESC>[<Y>;<X>H
+    20                                  POSLEN:		  equ $-PosTerm		      ; Length of term position string
+    21 00000008 1B5B324A                ClearTerm: 	  db 27, "[2J"		      ; <ESC>[2J
+    22                                  CLEARLEN 	  equ $-ClearTerm	      ; Length of term clear string
+    23 0000000C 4465617468206F6620-     AdMsg:		  db "Death of a Star!"	      ; Ad message
+    24 00000015 61205374617221     
+    25                                  ADLEN:		  equ $-AdMsg		      ; Length of ad message
+    26 0000001C 507265737320456E74-     Prompt:		  db "Press Enter: "	      ; User prompt
+    27 00000025 65723A20           
+    28                                  PROMPTLEN:	  equ $-Prompt		      ; Length of user prompt
+    29                                  
+    30                                  ; This table gives us pairs of ASCII digits from 0-80. Rather than
+    31                                  ; calculating ASCII digits to insert in the terminal control string,
+    32                                  ; we look them up in the table and read back two digits at once to
+    33                                  ; a 16-bit register like DX, which we then poke into the terminal
+    34                                  ; control string PosTerm at the appropriate place. See GotoXY.
+    35                                  ; If you intend to work on a larger console than 80 X 80, you must
+    36                                  ; add additional ASCII digit encoding to the end of Digits. Keep in
+    37                                  ; mind that the code shown here will only work up to 99 X 99.
+    38                                  
+    39 00000029 303030313032303330-     Digits: 	db "0001020304050607080910111213141516171819"
+    40 00000032 343035303630373038-
+    41 0000003B 303931303131313231-
+    42 00000044 333134313531363137-
+    43 0000004D 31383139           
+    44 00000051 323032313232323332-     		db "2021222324252627282930313233343536373839"
+    45 0000005A 343235323632373238-
+    46 00000063 323933303331333233-
+    47 0000006C 333334333533363337-
+    48 00000075 33383339           
+    49 00000079 343034313432343334-     		db "4041424344454647484950515253545556575859"
+    50 00000082 343435343634373438-
+    51 0000008B 343935303531353235-
+    52 00000094 333534353535363537-
+    53 0000009D 35383539           
+    54 000000A1 363036313632363336-     		db "606162636465666768697071727374757677787980"
+    55 000000AA 343635363636373638-
+    56 000000B3 363937303731373237-
+    57 000000BC 333734373537363737-
+    58 000000C5 373837393830       
+    59                                  
+    60                                  SECTION .bss				       ; section containing uninitialised data
+    61                                  
+    62                                  
+    63                                  SECTION .text				       ; section containing code
+    64                                  
+    65                                  ; ------------------------------------------------------------------------------
+    66                                  ; ClrScr:	clear the Linux Console
+    67                                  ; Updated:	4/29/2015
+    68                                  ; In:		Nothing
+    69                                  ; Returns:	Nothing
+    70                                  ; Modifies	Nothing
+    71                                  ; Calls:	kernel sys_write
+    72                                  ; Description: 	sends the predefined control string <ESC>[2J to the console,
+    73                                  ;               which clears the full display
+    74                                  ;
+    75                                  ;
+    76                                  
+    77                                  ClrScr:
+    78 00000000 50                      	push eax			        ; save pertinent registers
+    79 00000001 53                      	push ebx
+    80 00000002 51                      	push ecx
+    81 00000003 52                      	push edx
+    82 00000004 B9[08000000]            	mov ecx, ClearTerm		        ; Pass offset of terminal control string
+    83 00000009 BA04000000              	mov edx, CLEARLEN		        ; pass the length of terminal control string
+    84 0000000E E854000000              	call WriteStr			        ; send control string to console
+    85 00000013 5A                      	pop edx				        ; restore pertinent registers
+    86 00000014 59                      	pop ecx
+    87 00000015 5B                      	pop ebx
+    88 00000016 58                      	pop eax
+    89 00000017 C3                      	ret				        ; go home
+    90                                  
+    91                                  ; ------------------------------------------------------------------------------
+    92                                  ; GotoXY:	        position the linux console cursor to an X,Y positision
+    93                                  ; UPDATED: 	        4/29/2015
+    94                                  ; In:		        X in AH, Y in AL
+    95                                  ; Returns:	        Nothing
+    96                                  ; Modifies:	        PosTerm terminal control sequence string
+    97                                  ; calls: 	        kernel sys_write
+    98                                  ; Description: 	        prepares a terminal control string for the X, Y coordinates
+    99                                  ;		        passed in AL and AH and calls sys_write to position the console
+   100                                  ;		        cursor to that X,Y position. Writing text to the console after
+   101                                  ;		        GotoXY will begin display of text at that X,Y position.
+   102                                  
+   103                                  GotoXY:
+   104 00000018 60                      	pushad				         ; save caller's registers
+   105 00000019 31DB                    	xor ebx, ebx			         ; zero EBX
+   106 0000001B 31C9                    	xor ecx, ecx			         ; Ditto ECX
+   107                                  
+   108                                  ; Poke the Y digits:
+   109 0000001D 88C3                    	mov bl, al			         ; put Y value into scale term EBX
+   110 0000001F 668B8C1B[29000000]      	mov cx, word [Digits+ebx*2]	         ; fetch decimal digits to CX
+   111 00000027 66890D[02000000]        	mov word [PosTerm+2], cx	         ; poke digits into control string
+   112                                  ; Poke the X digits:
+   113 0000002E 88E3                    	mov bl, ah			         ; put Y value into scale term EBX
+   114 00000030 668B8C1B[29000000]      	mov cx, word [Digits+ebx*2]	         ; fetch decimal digits to CX
+   115 00000038 66890D[05000000]        	mov word [PosTerm+5], cx	         ; poke digits into control string
+   116                                  ; Send control sequence to stdout:
+   117 0000003F B9[00000000]            	mov ecx, PosTerm		         ; pass address of the control string
+   118 00000044 BA08000000              	mov edx, POSLEN			         ; pass the length of the control string
+   119 00000049 E819000000              	call WriteStr			         ; send control string to the console
+   120                                  ; Wrap up and go home:
+   121 0000004E 61                      	popad
+   122 0000004F C3                      	ret				         ; go home
+   123                                  
+   124                                  ; ------------------------------------------------------------------------------
+   125                                  ; WriteCtr:	    send a string centered to an 80-char wide linux console
+   126                                  ; Updated:	    4/29/2015
+   127                                  ; In:		    Y value in AL, string address in ECX, string length in EDX
+   128                                  ; returns:	    nothing
+   129                                  ; modifies:	    PosTerm terminal control sequence string
+   130                                  ; calls:	    GotoXY, WriteStr
+   131                                  ; Description:	    Displays a string to Linux console centered in an 80-clumn
+   132                                  ;                   display.Calculates the X for the passed-in string length,
+   133                                  ;                   then calls GotoXY and WriteStr to send the string to the
+   134                                  ;                   console.
+   135                                  ;
+   136                                  
+   137                                  WriteCtr:
+   138 00000050 53                      	push ebx			          ; save caller's EBX
+   139 00000051 31DB                    	xor ebx, ebx			          ; zero EBX
+   140 00000053 B350                    	mov bl, SCRWIDTH		          ; load the screen width value to BL
+   141 00000055 28D3                    	sub bl, dl			          ; Take diff. of screen width and string
+   142                                                                      		  ; length
+   143 00000057 D0EB                      shr bl, 1                         		  ; divide the difference by 2 for X value
+   144 00000059 88DC                      mov ah, bl                        		  ; GotoXY requires X value in AH
+   145 0000005B E8B8FFFFFF                call GotoXY                       		  ; position cursor for display
+   146 00000060 E802000000                call WriteStr                     		  ; write the string to the console
+   147 00000065 5B                        pop ebx                           		  ; restore caller's EBX
+   148 00000066 C3                        ret                               		  ; go home
+   149                                  
+   150                                  ;-------------------------------------------------------------------------
+   151                                  ; WriteStr:     Send a string to the Linux console
+   152                                  ; UPDATED:      4/30/2015
+   153                                  ; IN:           String address in ECX, string length in EDX
+   154                                  ; RETURNS:      Nothing
+   155                                  ; MODIFIES:     Nothing
+   156                                  ; CALLS:        Kernel sys_write
+   157                                  ; DESCRIPTION:  Displays a string to the Linux console through a
+   158                                  ;               sys_write kernel call
+   159                                  
+   160                                  WriteStr:
+   161 00000067 50                        push eax                          		  ; save pertinent registeres
+   162 00000068 53                        push ebx
+   163 00000069 B804000000                mov eax, 4                        		  ; specify sys_write call
+   164 0000006E BB01000000                mov ebx, 1                        		  ; specify file descriptor: 1, stdout
+   165 00000073 CD80                      int 80H                           		  ; make the kernel call
+   166 00000075 5B                        pop ebx
+   167 00000076 58                        pop eax
+   168 00000077 C3                        ret                               		  ; go home
+   169                                  
+   170                                  global _start                        		  ; linker needs this to find the entery point
+   171                                  _start:
+   172                                  
+   173 00000078 90                            nop
+   174                                  ; first we clear the screen display
+   175 00000079 E882FFFFFF                    call ClrScr
+   176                                  ; then we post the ad message centered on the 80-wide console:
+   177 0000007E B00C                          mov al, 12                    ; Specy line 12
+   178 00000080 B9[0C000000]                  mov ecx, AdMsg                ; pass address of message
+   179 00000085 BA10000000                    mov edx, ADLEN                ; pass length of message
+   180 0000008A E8C1FFFFFF                    call WriteCtr                 ; display to the console
+   181                                  
+   182                                  ; position the cursor for the "press enter" prompt:
+   183 0000008F 66B81701                      mov ax, 0117h                 ; X,Y = 1,23 as a single hex value in AX
+   184 00000093 E880FFFFFF                    call GotoXY                   ; position the cursor
+   185                                  
+   186                                  ; Display the "press enter" prompt:
+   187 00000098 B9[1C000000]                  mov ecx, Prompt               ; pass offset of the prompt
+   188 0000009D BA0D000000                    mov edx, PROMPTLEN            ; pass the length of prompt
+   189 000000A2 E8C0FFFFFF                    call WriteStr                 ; send the prompt to the console
+   190                                  
+   191                                  ; wait for the user to press enter:
+   192 000000A7 B803000000                    mov eax, 3                    ; code for sys_read
+   193 000000AC BB00000000                    mov ebx, 0                    ; specify file descriptor 0: stdin
+   194 000000B1 CD80                          int 80H                       ; make kernel call
+   195                                  
+   196                                  ; ... and we're done
+   197                                  
+   198 000000B3 B801000000              Exit: mov eax, 1                    ; code for exit syscall
+   199 000000B8 BB00000000                    mov ebx, 0                    ; return a code for 0
+   200 000000BD CD80                          int 80H                       ; make kernel call
