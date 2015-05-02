@@ -14,7 +14,8 @@
 
 SECTION .data
 	EOL	equ 10
-	FILLCHR	equ 32
+	FILLCHR	equ 32					; terminal specific data, might vary with 
+							; encoding and terminal in use
 	HBARCHR	equ 196
 	STRTROW	equ 2
 
@@ -27,7 +28,7 @@ SECTION .data
 ; this escape sequence will clear the linux console and place the text 
 ; cursor to the origin (1,1) on virtually all linux consoles:
 
-	ClrHome db 27, "[2J",27,"[01;01H"
+	ClrHome db 27, "[2J",27,"[01;01H"		; again, terminal specific string
 	CLRLEN	equ $-ClrHome				; Length of term clear string
 
 SECTION .bss						; section containing the uninitialised data
@@ -82,7 +83,7 @@ ClrVid:
 	mov al, FILLCHR					; put the buffer filler char in AL
 	mov edi, VidBuff				; point destination index at buffer
 	mov ecx, COLS*ROWS				; put the count of chars stored into ECX
-	rep stosb						; blast characters at the buffer
+	rep stosb					; blast characters at the buffer
 
 ; Buffer is cleared; now we need to re-insert the EOL char after each line:
 
