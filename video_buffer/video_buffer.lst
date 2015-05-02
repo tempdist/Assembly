@@ -14,7 +14,7 @@
     14                                  
     15                                  SECTION .data
     16                                  	EOL	equ 10
-    17                                  	FILLCHR	equ 32
+    17                                  	FILLCHR	equ 77
     18                                  	HBARCHR	equ 196
     19                                  	STRTROW	equ 2
     20                                  
@@ -83,10 +83,10 @@
     83 0000001A 51                      	push ecx
     84 0000001B 57                      	push edi
     85 0000001C FC                      	cld
-    86 0000001D B020                    	mov al, FILLCHR					; put the buffer filler char in AL
+    86 0000001D B04D                    	mov al, FILLCHR					; put the buffer filler char in AL
     87 0000001F BF[00000000]            	mov edi, VidBuff				; point destination index at buffer
     88 00000024 B9E9070000              	mov ecx, COLS*ROWS				; put the count of chars stored into ECX
-    89 00000029 F3AA                    	rep stosb						; blast characters at the buffer
+    89 00000029 F3AA                    	rep stosb					; blast characters at the buffer
     90                                  
     91                                  ; Buffer is cleared; now we need to re-insert the EOL char after each line:
     92                                  
